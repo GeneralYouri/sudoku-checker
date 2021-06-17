@@ -1,3 +1,4 @@
+const assert = require('assert').strict;
 
 /** Main Puzzle class, controls the grid and all relevant rule instances */
 class Puzzle {
@@ -91,12 +92,12 @@ class RuleBase {
 }
 
 // A region must contain exactly one of each symbol used in the puzzle
-// TODO: Add a construction check that the number of cells is correct, which depends on the puzzle and not the solution
 class RuleRegion extends RuleBase {
     name = 'region';
     isUniques = true;
 
-    constructor(cells) {
+    constructor(cells, size) {
+        assert.ok(cells.length === size, 'A Region must contain all used symbols once each; to use an Incomplete Region, use a Killer Cage instead');
         super(cells);
     }
 }
@@ -180,6 +181,7 @@ class RuleSandwich extends RuleBase {
     sum;
 
     constructor(cells, minSymbol, maxSymbol, sum) {
+        assert.ok(cells.length >= 2, 'A sandwich requires at least two cells for the crust, even if the contents are empty');
         super(cells);
         this.minSymbol = minSymbol;
         this.maxSymbol = maxSymbol;
@@ -225,6 +227,7 @@ class RuleClone extends RuleBase {
     name = 'clone';
 
     constructor(cells) {
+        assert.ok(cells.length > 1 && cells.every(clone => clone.length === cells[0].length), 'A clone is defined as multiple separate groups of cells, all of the same size');
         super(cells);
     }
 
@@ -249,6 +252,7 @@ class RuleBetweenLine extends RuleBase {
     name = 'between-line';
 
     constructor(cells) {
+        assert.ok(cells.length >= 2, 'A between line requires at least two cells for the delimiter circles, line itself is empty');
         super(cells);
     }
 
@@ -301,6 +305,7 @@ class RuleQuadruple extends RuleBase {
     name = 'quadruple';
 
     constructor(cells, quadruple) {
+        assert.ok(cells.length <= 4 && quadruple.length <= cells.length, 'By design, a quadruple can only span up to four cells and cannot contain more digits than it spans cells');
         super(cells);
         this.quadruple = quadruple;
     }
@@ -315,7 +320,8 @@ module.exports = Puzzle;
 
 
 /** Test */
-const puzzle = new Puzzle(9);
+const size = 9;
+const puzzle = new Puzzle(size);
 
 // Normal sudoku rules
 const cells = puzzle.grid;
@@ -328,7 +334,7 @@ for (let y = 0; y < puzzle.size; y += 1) {
         col.push(cells[x][y]);
         box.push(cells[3 * Math.floor(y / 3) + Math.floor(x / 3)][(3 * y) % 9 + x % 3]);
     }
-    puzzle.addRules(new RuleRegion(row), new RuleRegion(col), new RuleRegion(box));
+    puzzle.addRules(new RuleRegion(row, puzzle.size), new RuleRegion(col, puzzle.size), new RuleRegion(box, puzzle.size));
 }
 
 // Variant rules
