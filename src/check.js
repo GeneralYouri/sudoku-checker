@@ -15,6 +15,14 @@ class Puzzle {
         this.rules.push(...rules);
     }
 
+    getValues(...indices) {
+        return indices.map((x, y) => this.grid[y][x].value);
+    }
+
+    setValue(x, y, value) {
+        this.grid[y][x].value = value;
+    }
+
     check() {
         return this.rules.every(rule => {
             console.log(rule.name, rule.check(puzzle.grid));
@@ -43,7 +51,7 @@ class RuleBase {
         return this.#cells.length;
     }
     get cellValues() {
-        return this.#cells.map(cell => cell.value);
+        return this.#cells.map(cell => (cell instanceof Cell ? cell.value : cell.map(c => c.value)));
     }
 
     constructor(cells) {
@@ -212,16 +220,93 @@ class RuleRatio extends RuleBase {
     }
 }
 
-// A ratio clue between two cells indicates the exact absolute value ratio between the two cell values
-class RuleRatio extends RuleBase {
-    name = 'ratio';
-    isRelation = true;
-    relation = (a, b) => a * this.ratio === b || b * this.ratio === a;
-    ratio;
+// A clone must have identical cell values identical positions to its counterpart clone(s)
+class RuleClone extends RuleBase {
+    name = 'clone';
 
-    constructor(cells, difference) {
+    constructor(cells) {
         super(cells);
-        this.ratio = difference;
+    }
+
+    check() {
+        return this.cellValues.every(clone => clone.every((cell, i) => cell === this.cellValues[0][i]));
+    }
+}
+
+// An arrow's circle cell value must contain the sum of its arrow cell values
+class RuleArrow extends RuleBase {
+    name = 'arrow';
+    isSum = true;
+    sum = n => n === 2 * this.cellValues[0];
+
+    constructor(cells) {
+        super(cells);
+    }
+}
+
+// A between line's circle values must contain both a value higher than, and a value lower than all cells on the line itself
+class RuleBetweenLine extends RuleBase {
+    name = 'between-line';
+
+    constructor(cells) {
+        super(cells);
+    }
+
+    check() {
+        const left = this.cellValues[0];
+        const right = this.cellValues[this.cellValues.length - 1];
+        return this.cellValues.slice(1, -1).every((cell, i) => Math.min(left, right) < cell && cell < Math.max(left, right));
+    }
+}
+
+// A minimum cell value is smaller than all related cells
+class RuleMinimum extends RuleBase {
+    name = 'minimum';
+
+    constructor(cells) {
+        super(cells);
+    }
+
+    check() {
+        return this.cellValues.slice(1).every(cell => this.cellValues[0] < cell);
+    }
+}
+
+// A maximum cell value is larger than all related cells
+class RuleMaximum extends RuleBase {
+    name = 'maximum';
+
+    constructor(cells) {
+        super(cells);
+    }
+
+    check() {
+        return this.cellValues.slice(1).every(cell => this.cellValues[0] > cell);
+    }
+}
+
+// An XV clue between two cells indicates the exact sum of the two cell values
+class RuleXV extends RuleBase {
+    name = 'xv';
+    isSum = true;
+
+    constructor(cells, sum) {
+        super(cells);
+        this.sum = sum;
+    }
+}
+
+// A quadruple must contain the given quadruple values in at least one of its relevant cells
+class RuleQuadruple extends RuleBase {
+    name = 'quadruple';
+
+    constructor(cells, quadruple) {
+        super(cells);
+        this.quadruple = quadruple;
+    }
+
+    check() {
+        return this.quadruple.every(quad => this.cellValues.includes(quad));
     }
 }
 
@@ -232,6 +317,7 @@ module.exports = Puzzle;
 /** Test */
 const puzzle = new Puzzle(9);
 
+// Normal sudoku rules
 const cells = puzzle.grid;
 for (let y = 0; y < puzzle.size; y += 1) {
     const row = [];
@@ -244,6 +330,8 @@ for (let y = 0; y < puzzle.size; y += 1) {
     }
     puzzle.addRules(new RuleRegion(row), new RuleRegion(col), new RuleRegion(box));
 }
+
+// Variant rules
 puzzle.addRules(new RuleOdd([cells[2][3]])); // 1
 puzzle.addRules(new RuleEven([cells[2][4]])); // 2
 puzzle.addRules(new RuleThermometer([cells[1][1], cells[1][2], cells[2][1], cells[2][2]])); // 5689
@@ -253,9 +341,17 @@ puzzle.addRules(new RuleLittleKiller([cells[0][3], cells[1][2], cells[2][1], cel
 puzzle.addRules(new RuleSandwich([cells[0][2], cells[1][2], cells[2][2], cells[3][2], cells[4][2], cells[5][2], cells[6][2], cells[7][2], cells[8][2]], 1, 9, 11)); // 9471
 puzzle.addRules(new RuleDifference([cells[2][3], cells[3][4]], 5)); // 61
 puzzle.addRules(new RuleRatio([cells[2][1], cells[3][2]], 2)); // 84
+puzzle.addRules(new RuleClone([[cells[1][2], cells[1][3], cells[2][3]], [cells[3][4], cells[3][5], cells[4][5]]])); // 671
+puzzle.addRules(new RuleArrow([cells[2][2], cells[1][2], cells[0][1], cells[0][0]])); // 9621
+puzzle.addRules(new RuleBetweenLine([cells[2][4], cells[2][5], cells[3][4], cells[3][3], cells[4][2]])); // 23657
+puzzle.addRules(new RuleMinimum([cells[2][4], cells[1][4], cells[2][5], cells[3][4]])); // 2836
+puzzle.addRules(new RuleMaximum([cells[2][1], cells[1][1], cells[2][0], cells[3][1]])); // 8573
+puzzle.addRules(new RuleXV([cells[1][4], cells[2][4]], 10)); // 82
+puzzle.addRules(new RuleQuadruple([cells[1][2], cells[1][3], cells[2][2], cells[2][3]], [9, 6])); // 6791
 
 
 
+// Input sample grid
 const solution = [
     [1,2,3,4,5,6,7,8,9],
     [4,5,6,7,8,9,1,2,3],
@@ -267,10 +363,9 @@ const solution = [
     [6,7,8,9,1,2,3,4,5],
     [9,1,2,3,4,5,6,7,8],
 ];
-
 for (let y = 0; y < puzzle.size; y += 1) {
     for (let x = 0; x < puzzle.size; x += 1) {
-        puzzle.grid[y][x].value = solution[y][x];
+        puzzle.setValue(x, y, solution[y][x]);
     }
 }
 
